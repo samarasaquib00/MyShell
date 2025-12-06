@@ -1,0 +1,20 @@
+1. Features specified in the handout that work.
+  Parsing and executing commands (lex and yacc)
+  File redirection
+  Pipes
+  isatty()
+  Ctrl+C
+  Zombie Elimination
+  Exit
+  Quotes
+  Escaping
+  Builtin Functions
+  Subshells
+  Environmental variable expansion
+  Tilde expansion
+  Edit mode
+  Variable Prompt (Extra Credit)
+
+2. Features specified in the handout that do not work.
+  Wildcarding
+

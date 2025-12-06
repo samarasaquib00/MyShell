@@ -1,0 +1,311 @@
+/*
+ * CS252: Shell project
+ *
+ * Template file.
+ * You will need to add more code here to execute the command table.
+ *
+ * NOTE: You are responsible for fixing any bugs this code may have!
+ *
+ * DO NOT PUT THIS PROJECT IN A PUBLIC REPOSITORY LIKE GIT. IF YOU WANT
+ * TO MAKE IT PUBLICALLY AVAILABLE YOU NEED TO REMOVE ANY SKELETON CODE
+ * AND REWRITE YOUR PROJECT SO IT IMPLEMENTS FUNCTIONALITY DIFFERENT THAN
+ * WHAT IS SPECIFIED IN THE HANDOUT. WE OFTEN REUSE PART OF THE PROJECTS FROM
+ * SEMESTER TO SEMESTER AND PUTTING YOUR CODE IN A PUBLIC REPOSITORY
+ * MAY FACILITATE ACADEMIC DISHONESTY.
+ */
+
+/*
+ *
+ * CS-252 
+ * shell.l: lexical analyzer for shell
+ * You have to extend it.
+ *
+ */
+
+
+%x incl
+%{
+
+#include <cstring>
+#include "y.tab.hh"
+#include "shell.hh"
+#include <fstream>
+#include <vector>
+
+
+static  void yyunput (int c,char *buf_ptr  );
+
+
+void myunputc(int c) {
+  unput(c);
+}
+
+bool Shell::_isSrc = false;
+%}
+
+%option noyywrap
+
+%%
+
+
+
+
+
+\n {
+  return NEWLINE;
+}
+
+[ \t] {
+  /* Discard spaces and tabs */
+}
+
+">" {
+  return GREAT;
+}
+
+"<" {
+  return LESS;
+}
+
+">&" {
+ return GREATAMPERSAND;
+}
+
+">>&" {
+  return GREATGREATAMPERSAND;
+}
+
+"2>" {
+  return TWOGREAT;
+}
+
+"&" {
+  return AMPERSAND;
+}
+
+">>" {
+  return GREATGREAT;
+}
+
+"|" {
+  return PIPE;
+}
+
+
+"source "[^ \t\n|><]+ {
+
+std::string *name = new std::string(yytext + strlen("source "));
+    std::ifstream file;
+    file.open(*name);
+    std::vector<std::string> all_lines;
+    std::string line;
+
+   while(std::getline(file, line)) {
+        line += "\n";
+        all_lines.push_back(line);
+    }
+    file.close();
+    int l = all_lines.size() - 1;
+    for(; l >= 0; l--) {
+        for (int j = all_lines[l].length() - 1; j >= 0; j--) {
+            myunputc(all_lines[l][j]);
+        }
+   }
+
+// create a string for the file name
+// if stream library -- allows you to create a file pointer
+  // after you open the file, create an arraylist(vector) of strings called listofcommands
+      //while you iterate through the file (use std::getline()), append(pushback) current command in our file to + \n
+      //close file when done
+    //reverse list because pushback appends backwards
+    //iterate through list of commands, and output them using myunputc. for each command, go char by char and call myunputc()
+                                                                          // iterate through the current command in reverse order
+
+}
+
+<<EOF>> {
+  yypop_buffer_state();
+  if (!YY_CURRENT_BUFFER) {
+    yyterminate();
+  }
+}
+
+
+
+\$\([^ \t\n]*[^\t\n]*\) {
+  /* SUBSHELL */
+
+  // 1. A command containing a subshell command is passed to the shell
+  // 2. The shell parses the echo command normally.
+  // 3. The shell parses the subshell command `ls`
+  // 4. After executing the command in the subshell the input is injected at the head of the buffer
+  // 5. Finally the shell parses file1, file2, file3, and “and more” as the arguments to echo.
+
+  // Implement this feature by:
+
+  // Scanning the command between backticks in shell.l
+
+
+  // Reading the output from the child process and putting the characters of the output back into the scanner’s
+    // buffer using the function yy_unput(int c) in reverse order. See the FAQ for more details.
+  yytext[strlen(yytext) - 1] = '\0';              // deletes the last parentheses - replaces with null terminator
+  std::string *s = new std::string(&yytext[2]);   // deletes the dollar sign at the beginning
+
+
+
+  // check if it is between backticksi
+  /*if (s[0] == '`') {
+    // delete tick marks
+    s = s.substr(1, s.length()-2);
+  }*/
+
+  // check if is after a dollar sign
+  //if (strcmp(s.at(0), '$') == 0) {
+  /*if (s[0] == '$') {
+   // delete dollar sign and parentheses
+   s = s.substr(2, s.length() - 2);
+  }*/
+
+  //
+
+  // Preprocessing
+  std::string exit = "exit\n";
+
+
+  // Calling your own shell as a child process and passing it the command as input.
+    // You will need two pipes to communicate with the child process; one to pass the command to the child,
+    // and the other to read the output from the child.
+
+  // send the command as an input to the shell
+
+  // Set up Inputs
+  int tmpin = dup(0);
+
+  // Set up Outputs
+  int tmpout = dup(1);
+
+  // Set up Pipes
+  int pin[2];
+  int pout[2];
+
+  pipe(pin);
+  pipe(pout);
+
+  write(pin[1], s->c_str(), s->size());   //subshell input
+  write(pin[1], "\n", 1);               //adding a newline
+  write(pin[1], exit.c_str(), exit.size());
+  close(pin[1]);
+
+  // before execute, reset stdin and stdout to point to the pipe
+  dup2(pin[0],0);   // redirecting pin to stdin
+  dup2(pout[1],1);     // redirecting pout to standard output
+
+  close(pin[0]);
+  close(pout[1]);
+
+  int ret = fork();
+
+  if (ret == 0) {
+    // child process created
+    // call exec vp
+    execvp("proc/self/exe");
+    perror(“execvp”);
+    _exit(1);
+  }
+  else if (ret < 0) {
+    // error
+    perror(“fork”);
+    return;
+
+  }
+
+  waitpid(ret, NULL, 0);   // in the parent
+
+  dup2(tmpout, 1);    // redirecting the tmpout to standard out
+  dup2(tmpin, 0);
+  close(tmpout);
+  close(tmpin);
+
+
+  // Reading the output from the child process and putting the characters of the output back 
+  // into the scanner’s buffer using the function yy_unput(int c) in reverse order. See the FAQ for more details.-
+
+  // create a c++ string buffer
+  // use read function to read through pout[0]
+  // create a temporary varialble called char
+
+
+  //while(read(pout[0], &[charName], 1))
+    // first building the string that we are gonna reverse read
+    // create char x outside of while loop, and read &x
+    // build the string, if i run into a newline, append a space ' ' to the buffer
+  // second while loop to reverse. get the buffer size -- int i = buffername.size() - 12
+//while (i >= 0){ 
+
+//} ...
+      // start at the end of the buffer-12: strlen([buffername]) - 12
+      // go backwards to 1
+
+    int i = 0;
+    std::string buffer;   // deletes the dollar sign at the beginning
+    char x;
+    //build the string
+    while(read(pout[0], &x, 1)) {
+      if (x == '\n') {
+        buffer += ' ';
+      } else {    // any other character
+        buffer+= x;
+      }
+      i++;
+    }
+    //buffer += '\0';     // null terminator
+    buffer = buffer.c_str();
+
+    //reverse the buffer string
+    int j = strlen(buffer) - 12;      // go to the index of the last character in c
+    while (j >= 0) {
+      myunputc(buffer[j]);
+      j--;
+    }
+
+
+
+    // if i fail the test cases, try changing -12 to different numbers
+
+
+}
+
+
+
+[^ \t\n|><&\\][^ \t\n|><&\\]*  {
+  /* Assume that file names have only alpha chars */
+  yylval.cpp_string = new std::string(yytext);
+  return WORD;
+}
+
+
+["][^\n\"]*["] {
+  std::string s = std::string(yytext);
+  s = s.substr(1, s.length() - 2);
+  yylval.cpp_string = new std::string(s);
+  return WORD;
+}
+
+[^ \t\n|><&]*\\[^ \t\n]* {
+  std::string s = std::string(yytext);
+  // iterate through the string and delete each backslash
+  int i = 0;
+  while (s[i] != '\0') {
+    if (s.at(i) == '\\') {
+      s.erase(i, 1);
+    }
+    i++;
+  }
+  yylval.cpp_string = new std::string(s);
+  return WORD;
+}
+
+
+
+
+
